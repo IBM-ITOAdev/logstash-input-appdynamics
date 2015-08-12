@@ -1,5 +1,5 @@
 # encoding: utf-8                                                              
-#
+
 
 require 'logstash/inputs/base'
 require 'logstash/namespace'
@@ -11,6 +11,7 @@ require 'java' # for the java data format stuff
 
 class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
   config_name "appdynamics"
+  milestone 1
 
   default :codec, "plain"
   config :user, :validate => :string, :required => true
@@ -35,10 +36,9 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
       bufferedEvents = []
 
       metricURIs.each do | group,uriArray |
- 
         uriArray.each do | uriOriginal |
 
-#puts("uriOriginal = " + uriOriginal)
+          @logger.debug("uriOriginal = " + uriOriginal)
           uri = URI.escape(uriOriginal)
 
           uriTimerange = "&time-range-type=BETWEEN_TIMES&start-time=" + 
@@ -47,38 +47,44 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
 
           curlString = curlStringBase +  uri + uriTimerange + "&output=JSON'" 
 
-#puts("curlString = " + curlString)
+          @logger.debug("curlString = " + curlString)
 
           response = `#{curlString}` 
           # `curl --user rmckeown@customer1:appdynamics 'http://oc3122150850.ibm.com:8090/controller/rest/applications/Database%20Monitoring/metric-data?metric-path=Databases%7CRESO131%7CKPI%7C*&time-range-type=BEFORE_NOW&duration-in-mins=60&output=JSON'`
 
-          responseHash = JSON.parse(response)
-#puts("responseHash=" + responseHash.to_s)
+#puts("response = " + response)
 
-          responseHash.each do | e |
-            if e['metricName'] == "METRIC DATA NOT FOUND"
-            else
-              event = LogStash::Util.hash_merge(LogStash::Event.new,e)
-              event['group'] = group
-              decorate(event)
+          begin 
+            responseHash = JSON.parse(response)
+            @logger.debug("response = " + responseHash.to_s)
 
-              # unpack the fields and create names
-              metricNameSplit = event['metricName'].split("|")
-              (0..metricNameSplit.length-1).each do |i|
-                event['metricName' + i.to_s ] = metricNameSplit[i]
-              end 
-              metricPathSplit = event['metricPath'].split("|")
-              (0..metricPathSplit.length-1).each do |i|
-                event['metricPath' + i.to_s ] = metricPathSplit[i]
-              end 
+            responseHash.each do | e |
+              if e['metricName'] == "METRIC DATA NOT FOUND"
+              else
+                event = LogStash::Util.hash_merge(LogStash::Event.new,e)
+                event['group'] = group
+                decorate(event)
 
-              # extract key values .. bring them up from nested values to make them top-level attributes
-              event['timestamp'] = df.format(event['metricValues'][0]['startTimeInMillis'])
-              event['count']     = event['metricValues'][0]['count']
-              event['value']     = event['metricValues'][0]['value']
+                # unpack the fields and create names
+                metricNameSplit = event['metricName'].split("|")
+                (0..metricNameSplit.length-1).each do |i|
+                  event['metricName' + i.to_s ] = metricNameSplit[i]
+                end 
+                metricPathSplit = event['metricPath'].split("|")
+                (0..metricPathSplit.length-1).each do |i|
+                  event['metricPath' + i.to_s ] = metricPathSplit[i]
+                end 
 
-              bufferedEvents.push(event)
-            end # if
+                # extract key values .. bring them up from nested values to make them top-level attributes
+                event['timestamp'] = df.format(event['metricValues'][0]['startTimeInMillis'])
+                event['count']     = event['metricValues'][0]['count']
+                event['value']     = event['metricValues'][0]['value']
+
+                bufferedEvents.push(event)
+              end # if
+            end
+          rescue Exception => e
+            @logger.error("Ignoring response: " + response, :exception => e)
           end
         end
  
