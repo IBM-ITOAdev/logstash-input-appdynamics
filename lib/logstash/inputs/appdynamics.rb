@@ -7,6 +7,7 @@ require 'logstash/namespace'
 require 'net/http'
 require 'rest-client'
 require 'json'
+require 'pstore'
 require 'java' # for the java data format stuff
 
 class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
@@ -23,11 +24,14 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
   config :latency,    :validate => :number, :default => 0 # minutes
   config :aggregation_interval, :validate => :number, :default => 15 # minutes
 
+  config :PStoreFile, :validate => :string, :required => false, :default => ""
+
   config :sleep_interval, :validate => :number, :default => 10 # seconds
   config :SCAWindowMarker, :validate => :boolean, :default => false
 
   public
   def register 
+
 
   end
 
@@ -80,6 +84,11 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
                 event['count']     = event['metricValues'][0]['count']
                 event['value']     = event['metricValues'][0]['value']
 
+                # last field is PI metric (usually)
+                event['metric']   = metricPathSplit[metricPathSplit.length-1]
+                # and all but the last field is generally the PI resource
+                event['resource'] = metricPathSplit.slice(0,metricPathSplit.length-1).join("|")
+
                 bufferedEvents.push(event)
               end # if
             end
@@ -97,6 +106,8 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
   public
   def run(queue)
 
+    store = "" # placeholder
+
     timeIncrement = @aggregation_interval * 60000 # convert supplied minutes to milliseconds
     curlStringBase = "curl --user " + user + " 'http://" + address + "/controller/rest/" 
 
@@ -105,17 +116,38 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
 
     endTime   = df.parse("2100-01-01T00:00:00-0000") # long time in the future. Only used if user didn't specify end time so we can run 'forever'
 
+    latencySec = latency * 60 
+
+    # Establish start time, using configured @start_time if present, and defaulting to current time, if it is not
     if @start_time != "" then
-       startTime = df.parse(@start_time)
+        startTime = df.parse(@start_time)
+        puts("Setting start time from .conf as " + startTime.to_s )
     else
-#       # get start time, snapping to the nearest boundary e.g. 00:00 00:05, 00:15 .. depending on the increment
-#       startTime = Calendar.getInstance().getTime()
+        startTime = java.util.Date.new
+        puts("Setting start time as current time " + startTime.to_s )
+    end    
+
+puts("Start time = " + startTime.to_s)
+
+    # startTime can be overridden by a configured PStore file
+
+    # Initialize the PStore if necessary
+    if !@PStoreFile.eql?("")
+      # Actual PStoreFile defined
+      if !File.exist?(@PStoreFile)
+        # but one doesn't exit, prepare the store where we'll track most recent timestamp
+        store = PStore.new(@PStoreFile)
+      else
+        # store file does exist, so read start time from that, and if we can't read it, use the prepared startTime from above
+        startTime = store.transaction { store.fetch(:targetTime, startTime ) }  
+      end
     end
+
     if @end_time != "" then
        endTime = df.parse(@end_time)
     end
 
-    latencySec = latency * 60 
+
 
     # start from the specified startTime
     targetTime = startTime
@@ -140,9 +172,12 @@ class LogStash::Inputs::AppDynamics < LogStash::Inputs::Base
         end
         bufferedEvents.clear
 
-
         # move to next time interval
         targetTime.setTime(targetTime.getTime() + timeIncrement)
+        if !@PStoreFile.eql?("")
+puts("Writing targetTime of " + targetTime.to_s + " to store ")
+          store.transaction do store[:targetTime] = targetTime end
+        end
 
       else
         # wait a bit before trying again
