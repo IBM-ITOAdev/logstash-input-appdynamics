@@ -1,86 +1,153 @@
-# Logstash Plugin
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Logstash for SCAPI - input appdynamics</title>
+<link rel="stylesheet" href="http://logstash.net/style.css">
+</head>
+<body>
+<div class="container">
+<div class="header">
 
-This is a plugin for [Logstash](https://github.com/elasticsearch/logstash).
+<!--main content goes here, yo!-->
+<div class="content_wrapper">
+<h2>appdynamics</h2>
+<h3> Synopsis </h3>
+Connects to AppDynamics, and, on a configured schedule, extracts metrics from the REST i/f based upon the supplied set of URLs
+<pre><code>output {
+scacsv {
+  <a href="#user">user</a> => ... # string (required)
+  <a href="#address">address</a> => ... # string (required)
+  <a href="#metricURIs">metricURIs</a> => ... # hash (required)
+  <a href="start_time">start_time</a> => ... # string (optional), default: current time is used
+  <a href="end_time">start_time</a> => ... # string (optional), default: none
+  <a href="latency">latency</a> => ... # number (optional), default: 0 minutes
+  <a href="aggregation_interval">aggregation_interval</a> => ... # number (optional), default: 15 minutes
+  <a href="SCAWindowMarker">SCAWindowMarker</a> => ... # boolean (optional), default: false
+  }
+}
+</code></pre>
+<h3> Details </h3>
+Connects to AppDynamics, on a schedule, will extract data (using Curl commands constructued from the various metricURIs and user and address info.  Some basic processing of the returned JSON data will be carried out, mapping to named fields, and having some, ie timestamp, metric and resource of particular use with IBM Predictive Insights
+<h4>
+<a name="user">
+user
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#string">String</a> </li>
+<li> There is no default value for this setting </li>
+</ul>
+<p>Specify the AppDynamics user name - used when connecting to AppDynamics</p>
+<h4>
+<a name="address">
+address
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#string">String</a> </li>
+<li> There is no default value for this setting</li>
+</ul>
+<p>
+The address (ip:port, domain name etc) of the AppDynamic server
+</p>
+<h4>
+<a name="metricURIs">
+path
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#hash">hash</a> </li>
+<li> Default value is "" </li>
+</ul>
+<p>
+These form the basis for the REST URLs which will be run by the plugin. They are arranged as groups of URLS. The plugin will iterate through each group, and execute a REST command for each URL within that group. In addition to the data retrieved from AppDynamics, each event will have a 'group' attribute assigned too. This can be useful in separating data downstream in logstash to different outputs based upon groups.
+<p>Use
+<code>https://docs.appdynamics.com/display/PRO14S/Use+the+AppDynamics+REST+API as guidance</code>
+<p>Example entries</p>
+<pre><code>
+ metricURIs => {
+    "GroupTest" => ["applications/PNSE/metric-data?metric-path=Overall Application Performance|D84-Portal|*"]
+    "GroupBusinessTransactions" => [
+             "applications/CN/metric-data?metric-path=Business Transaction Performance|Business Transactions|Portal|Entry|Individual Nodes|*|*",
+             "applications/CN/metric-data?metric-path=Business Transaction Performance|Business Transactions|Portal|Exit|Individual Nodes|*|*" ]
+</code></pre>
+</p>
+<h4>
+<a name="start_time">
+start_time (optional setting)
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#string">string</a> </li>
+<li> There is no default value for this setting. </li>
+</ul>
+<p>
+The plugin will start collecting from the specified time.  If start_time is not provided, the plugin will collect data from current time.
 
-It is fully free and fully open source. The license is Apache 2.0, meaning you are pretty much free to use it however you want in whatever way.
+   # times format is  ISO8601 e.g.
+<code>start_time => "2015-08-21T14:32:00+0200"</code>
+</p>
 
-## Documentation
+<h4>
+<a name="end_time">
+end_time (optional setting)
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#string">string</a> </li>
+<li> There is no default value for this setting. </li>
+</ul>
+<p>
+The plugin will stop collecting from the specified time.  If stop_time is not provided, the plugin will continue to collect data, moving forward, limited only by wallclock time ( it won't go past current time) and the configured latency setting
 
-Logstash provides infrastructure to automatically generate documentation for this plugin. We use the asciidoc format to write documentation so any comments in the source code will be first converted into asciidoc and then into html. All plugin documentation are placed under one [central location](http://www.elasticsearch.org/guide/en/logstash/current/).
+   # times format is  ISO8601 e.g.
+<code>start_time => "2015-08-21T14:32:00+0200"</code>
+</p>
+<h4>
+<a name="latency">
+end_time (optional setting)
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#number">number</a> in minutes </li>
+<li> Default 0 mins meaning, run up to current wallclock time</li>
+</ul>
+<p>
+As the plugin moves forward through time, extracting data, it will stay behind current time by the specified amount of latency. This is typically used when the data is slow to become available in AppDynamics, e.g. due to slow agent loads or other environmental conditions.
+</p>
 
-- For formatting code or config example, you can use the asciidoc `[source,ruby]` directive
-- For more asciidoc formatting tips, see the excellent reference here https://github.com/elasticsearch/docs#asciidoc-guide
+<h4>
+<a name="aggregation_interval">
+aggregation_interval (optional setting)
+</a>
+</h4>
+<ul>
+<li> Value type is <a href="http://logstash.net/docs/1.4.2/configuration#number">number</a> in minutes </li>
+<li> Default 15mins </li>
+</ul>
+<p>
+As the plugin moves through time, it moves forward with this interval. E.g. if it started from 12:00, with this 15min setting, it would poll data for 12:00, then 12:15, then 12:30 and so on. This is usually aligned with the Predictive Insights aggregation interval
+</p>
+<h4>
+<a name="SCAWindowMarker">
+end_time (optional setting)
+</a>
+</h4>
 
-## Need Help?
-
-Need help? Try #logstash on freenode IRC or the https://discuss.elastic.co/c/logstash discussion forum.
-
-## Developing
-
-### 1. Plugin Developement and Testing
-
-#### Code
-- To get started, you'll need JRuby with the Bundler gem installed.
-
-- Create a new plugin or clone and existing from the GitHub [logstash-plugins](https://github.com/logstash-plugins) organization. We also provide [example plugins](https://github.com/logstash-plugins?query=example).
-
-- Install dependencies
-```sh
-bundle install
-```
-
-#### Test
-
-- Update your dependencies
-
-```sh
-bundle install
-```
-
-- Run tests
-
-```sh
-bundle exec rspec
-```
-
-### 2. Running your unpublished Plugin in Logstash
-
-#### 2.1 Run in a local Logstash clone
-
-- Edit Logstash `Gemfile` and add the local plugin path, for example:
-```ruby
-gem "logstash-filter-awesome", :path => "/your/local/logstash-filter-awesome"
-```
-- Install plugin
-```sh
-bin/plugin install --no-verify
-```
-- Run Logstash with your plugin
-```sh
-bin/logstash -e 'filter {awesome {}}'
-```
-At this point any modifications to the plugin code will be applied to this local Logstash setup. After modifying the plugin, simply rerun Logstash.
-
-#### 2.2 Run in an installed Logstash
-
-You can use the same **2.1** method to run your plugin in an installed Logstash by editing its `Gemfile` and pointing the `:path` to your local plugin development directory or you can build the gem and install it using:
-
-- Build your plugin gem
-```sh
-gem build logstash-filter-awesome.gemspec
-```
-- Install the plugin from the Logstash home
-```sh
-bin/plugin install /your/local/plugin/logstash-filter-awesome.gem
-```
-- Start Logstash and proceed to test the plugin
-
-## Contributing
-
-All contributions are welcome: ideas, patches, documentation, bug reports, complaints, and even something you drew up on a napkin.
-
-Programming is not a required skill. Whatever you've seen about open source and maintainers or community members  saying "send patches or die" - you will not see that here.
-
-It is more important to the community that you are able to contribute.
-
-For more information about contributing, see the [CONTRIBUTING](https://github.com/elasticsearch/logstash/blob/master/CONTRIBUTING.md) file.
+</div>
+<!--closes main container div-->
+<div class="clear">
+</div>
+<div class="footer">
+<p>
+Hello! I'm your friendly footer. If you're actually reading this, I'm impressed.
+</p>
+</div>
+<noscript>
+<div style="display:inline;">
+<img height="1" width="1" style="border-style:none;" alt="" src="//googleads.g.doubleclick.net/pagead/viewthroughconversion/985891458/?value=0&amp;guid=ON&amp;script=0"/>
+</div>
+</noscript>
+<script src="/js/patch.js?1.4.2"></script>
+</body>
+</html>
