@@ -14,7 +14,7 @@
 <h3> Synopsis </h3>
 Connects to AppDynamics, and, on a configured schedule, extracts metrics from the REST i/f based upon the supplied set of URLs
 <pre><code>output {
-scacsv {
+appdynamics {
   <a href="#user">user</a> => ... # string (required)
   <a href="#address">address</a> => ... # string (required)
   <a href="#metricURIs">metricURIs</a> => ... # hash (required)
