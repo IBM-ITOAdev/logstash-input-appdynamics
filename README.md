@@ -13,7 +13,7 @@
 <h2>appdynamics</h2>
 <h3> Synopsis </h3>
 Connects to AppDynamics, and, on a configured schedule, extracts metrics from the REST i/f based upon the supplied set of URLs
-<pre><code>onput{
+<pre><code>input{
 appdynamics {
   <a href="#user">user</a> => ... # string (required)
   <a href="#address">address</a> => ... # string (required)
